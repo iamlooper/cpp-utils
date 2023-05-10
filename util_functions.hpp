@@ -14,6 +14,7 @@
 #include <libgen.h>
 #include <regex>
 #include <unordered_map>
+#include <sys/stat.h>
 
 // Set standard (std) namespace.
 using namespace std;
@@ -36,6 +37,7 @@ string escape_special_characters(const string& text);
 string grep_prop(const string& property, const string& filename);
 bool is_net_connection();
 void web_fetch(const string& link, const string& file_path);
+bool is_path_exists(const string& path);
 
 // Logger function.
 void xlog(const string& log_type, const string& message) {
@@ -362,4 +364,10 @@ void web_fetch(const string& link, const string& file_path) {
   
   // Use exec_shell() function to execute shell command.
   exec_shell(cmd, false);
+}
+
+// Check if path exists.
+bool is_path_exists(const string& path) {
+  struct stat st;
+  return stat(path.c_str(), &st) == 0;
 }
