@@ -15,6 +15,7 @@
 #include <regex>
 #include <unordered_map>
 #include <sys/stat.h>
+#include <glob.h>
 
 // Set standard (std) namespace.
 using namespace std;
@@ -25,9 +26,10 @@ void write(const string& path, const string& contents);
 string print_date(const string& date_format);
 string exec_shell(const string& cmd, bool need_output);
 template <typename T, typename U>U convert(T value);
-string get_pidof(const string &process_name);
+string get_pid(const string& process_name);
+vector<string> get_pid_list(const string &process_name);
 void renice_process(const string& process_name, int new_priority);
-void force_kill(const string& process_name);
+void kill_process(const string& process_name);
 void set_cpu_affinity(const string& process_name, int start, int end);
 void change_scheduler(const string& process_name, const string& sched_policy, int priority);
 string get_home_pkgname();
@@ -38,6 +40,8 @@ string grep_prop(const string& property, const string& filename);
 bool is_net_connection();
 void web_fetch(const string& link, const string& file_path);
 bool is_path_exists(const string& path);
+vector<string> get_paths_from_wp(const string& path);
+void remove_path(const string& path);
 
 // Logger function.
 void xlog(const string& log_type, const string& message) {
@@ -57,18 +61,18 @@ void xlog(const string& log_type, const string& message) {
 // Write contents to a file.
 void write(const string& path, const string& contents) {
   // Open the file.
-  ofstream ofs(path);
+  ofstream file(path);
   // If the file was successfully opened.
-  if (ofs.is_open()) {
+  if (file.is_open()) {
     // Write the contents to the file.
-    ofs << contents;
+    file << contents;
     // Close the file.
-    ofs.close();
+    file.close();
   } else {
     // Print an error message if the file cannot be opened.
     xlog("error", "Failure opening file: " + path);
     // Close the file.
-    ofs.close();    
+    file.close();    
   }
 }
 
@@ -164,34 +168,54 @@ template <typename T, typename U>U convert(T value) {
   return result;
 }
 
-string get_pidof(const string &process_name) {
+string get_pid(const string &process_name) {
   // Initialize variable to read output.
   string output;
 
   // Build command to execute.
   string cmd = "ps -Ao pid,args | grep -i -E '" + process_name + "' | awk '{print $1}' | head -n 1";
   
-  // Use exec_shell() function to execute shell commands.
+  // Use exec_shell() function to execute the shell command.
   output = exec_shell(cmd, true);  
 
   // Return the output.
   return output;
 }
 
+vector<string> get_pid_list(const string &process_name) {
+  // Initialize variable to read output.
+  string output;
+
+  // Build command to execute.
+  string cmd = "ps -Ao pid,args | grep -i -E '" + process_name + "' | awk '{print $1}'";
+  
+  // Use exec_shell() function to execute the shell command.
+  output = exec_shell(cmd, true);  
+
+  // Split output by line and return as vector.
+  vector<string> pid_list;
+  stringstream ss(output);
+  string pid;
+  while (getline(ss, pid, '\n')) { 
+    pid_list.push_back(pid); 
+  }
+  return pid_list;
+}
+
 void renice_process(const string& process_name, int new_priority) {
-  // Get the process ID of the current process using get_pidof() function.
+  // Get the process ID of the current process using get_pid() function.
   // Use convert() function to convert string to pid_t.
-  pid_t pid = convert<string, pid_t>(get_pidof(process_name));
+  pid_t pid = convert<string, pid_t>(get_pid(process_name));
 
   // Set the priority of the process.
   setpriority(PRIO_PROCESS, pid, new_priority);
 }
 
 // Process killer function.
-void force_kill(const string& process_name) {
-  // Get the process ID of the current process using get_pidof() function.
+void kill_process(const string& process_name) {
+  // Get the process ID of the current process using get_pid() function.
   // Use convert() function to convert string to pid_t.
-  pid_t pid = convert<string, pid_t>(get_pidof(process_name));
+  pid_t pid = convert<string, pid_t>(get_pid(process_name));
     
   // Send the SIGKILL signal to the process with the specified PID.
   kill(pid, SIGKILL);
@@ -199,9 +223,9 @@ void force_kill(const string& process_name) {
 
 // Change CPU affinity of a process.
 void set_cpu_affinity(const string& process_name, int start, int end) {
-  // Get the process ID of the current process using get_pidof() function.
+  // Get the process ID of the current process using get_pid() function.
   // Use convert() function to convert string to pid_t.
-  pid_t pid = convert<string, pid_t>(get_pidof(process_name));
+  pid_t pid = convert<string, pid_t>(get_pid(process_name));
 
   // Initialize the mask to all zeros.
   cpu_set_t mask;
@@ -220,9 +244,9 @@ void set_cpu_affinity(const string& process_name, int start, int end) {
 
 // Change CPU scheduling of a process.
 void change_scheduler(const string& process_name, const int& sched_policy, int priority) {
-  // Get the process ID of the current process using get_pidof() function.
+  // Get the process ID of the current process using get_pid() function.
   // Use convert() function to convert string to pid_t.
-  pid_t pid = convert<string, pid_t>(get_pidof(process_name));
+  pid_t pid = convert<string, pid_t>(get_pid(process_name));
 
   // Set the scheduling policy for the current process to SCHED_FIFO.
   sched_param param;
@@ -370,4 +394,38 @@ void web_fetch(const string& link, const string& file_path) {
 bool is_path_exists(const string& path) {
   struct stat st;
   return stat(path.c_str(), &st) == 0;
+}
+
+// Get list of paths from wildcard path. (e.g /foo/*.txt)
+vector<string> get_paths_from_wp(const string& path) {
+  glob_t glob_result; // Create a glob_t structure to hold the globbing results.
+  std::vector<string> paths; // Create an empty vector to store the file paths.
+
+  // Use the glob function to perform wildcard pattern matching on the specified path.
+  // The GLOB_TILDE flag enables tilde expansion, nullptr is passed as the error object pointer,
+  // and the glob_result structure is populated with the matching file paths.
+  if (glob(path.c_str(), GLOB_TILDE, nullptr, &glob_result) == 0) {
+    // Iterate over the matched file paths in glob_result.
+    for (size_t i = 0; i < glob_result.gl_pathc; ++i) {
+      // Add each file path to the paths vector.
+      paths.emplace_back(glob_result.gl_pathv[i]);
+    }
+    globfree(&glob_result); // Free the memory allocated by glob_result.
+  }
+
+  return paths; // Return the vector of file paths.
+}
+
+// remove() with support to delete wildcard path.
+void remove_path(const string& path) {
+  // If the path contains an asterisk, then use the get_paths_from_wp() function to get a list of paths.
+  if (path.find('*') != string::npos) {
+    vector<string> paths = get_paths_from_wp(path);
+    for (const std::string& path : paths) {
+      remove(path.c_str());
+    }
+  } else {
+    // If path does not contain an asterisk, then continue with normal method.
+    remove(path.c_str());
+  }
 }
