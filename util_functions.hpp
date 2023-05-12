@@ -15,7 +15,8 @@
 #include <regex>
 #include <unordered_map>
 #include <sys/stat.h>
-#include <glob.h>
+
+#include "glob.h"
 
 // Set standard (std) namespace.
 using namespace std;
