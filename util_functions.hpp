@@ -48,7 +48,7 @@ void xlog(const string& log_type, const string& message) {
   if (log_type == "info") {
     cout << "[Info] " << message << endl;
   } else if (log_type == "error") {
-    cout << "[Error] " << message << endl;
+    cerr << "[Error] " << message << endl;
   } else if (log_type == "date") {
     cout << "[" + print_date("half") + "] " << message << endl;
   } else {
@@ -410,7 +410,7 @@ vector<string> get_paths_from_wp(const string& wildcard_path) {
   
   // Check if the base path exists.
   if (!is_path_exists(base_path)) {
-    xlog("error", "Base path does not exist: " + base_path);
+    xlog("error", "Base path does not exist: " + (string)base_path);
     return matched_paths;
   }  
 
@@ -422,14 +422,21 @@ vector<string> get_paths_from_wp(const string& wildcard_path) {
     }
   }
 
+  // Return list of matched paths from wildcard path.
   return matched_paths;
 }
 
 // remove() with support to delete wildcard path.
 void remove_path(const string& path) {
   // If the path contains an asterisk, then use the get_paths_from_wp() function to get a list of paths.
-  if (path.find('*') != string::npos) {
-    vector<string> paths = get_paths_from_wp(path);
+  if (path.find('*') != string::npos) { 
+    vector<string> paths;
+    // Catch an exception.
+    try {
+      paths = get_paths_from_wp(path);
+    } catch (const exception& e) {
+      xlog("error", "An exception occurred: " + (string)e.what());
+    }    
     for (const std::string& path : paths) {
       remove(path.c_str());
     }
