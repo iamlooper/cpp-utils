@@ -14,9 +14,7 @@
 #include <libgen.h>
 #include <regex>
 #include <unordered_map>
-#include <sys/stat.h>
-
-#include "glob.h"
+#include <filesystem>
 
 // Set standard (std) namespace.
 using namespace std;
@@ -41,7 +39,7 @@ string grep_prop(const string& property, const string& filename);
 bool is_net_connection();
 void web_fetch(const string& link, const string& file_path);
 bool is_path_exists(const string& path);
-vector<string> get_paths_from_wp(const string& path);
+vector<string> get_paths_from_wp(const string& wildcard_path);
 void remove_path(const string& path);
 
 // Logger function.
@@ -393,28 +391,38 @@ void web_fetch(const string& link, const string& file_path) {
 
 // Check if path exists.
 bool is_path_exists(const string& path) {
-  struct stat st;
-  return stat(path.c_str(), &st) == 0;
+  return filesystem::exists(path);
 }
 
 // Get list of paths from wildcard path. (e.g /foo/*.txt)
-vector<string> get_paths_from_wp(const string& path) {
-  glob_t glob_result; // Create a glob_t structure to hold the globbing results.
-  std::vector<string> paths; // Create an empty vector to store the file paths.
+vector<string> get_paths_from_wp(const string& wildcard_path) {
+  // Replace wildcard characters with their regex equivalents.
+  string regex_str = regex_replace(wildcard_path, regex(R"(\.)"), R"(\.)");
+  regex_str = regex_replace(regex_str, regex(R"(\*)"), R"(.*)");
+  regex_str = regex_replace(regex_str, regex(R"(\?)"), R"(.)");
+  regex path_regex(regex_str);
 
-  // Use the glob function to perform wildcard pattern matching on the specified path.
-  // The GLOB_TILDE flag enables tilde expansion, nullptr is passed as the error object pointer,
-  // and the glob_result structure is populated with the matching file paths.
-  if (glob(path.c_str(), GLOB_TILDE, nullptr, &glob_result) == 0) {
-    // Iterate over the matched file paths in glob_result.
-    for (size_t i = 0; i < glob_result.gl_pathc; ++i) {
-      // Add each file path to the paths vector.
-      paths.emplace_back(glob_result.gl_pathv[i]);
+  // Initialize a vector to store matched paths.
+  vector<string> matched_paths;
+
+  // Get the base path from the wildcard path.
+  filesystem::path base_path = filesystem::path(wildcard_path).parent_path();
+  
+  // Check if the base path exists.
+  if (!is_path_exists(base_path)) {
+    xlog("error", "Base path does not exist: " + base_path);
+    return matched_paths;
+  }  
+
+  // Iterate through the directory entries.
+  for (const auto& entry : filesystem::directory_iterator(base_path)) {
+    // Check if the current entry's path matches the regex pattern.
+    if (regex_match(entry.path().string(), path_regex)) {
+      matched_paths.push_back(entry.path().string());
     }
-    globfree(&glob_result); // Free the memory allocated by glob_result.
   }
 
-  return paths; // Return the vector of file paths.
+  return matched_paths;
 }
 
 // remove() with support to delete wildcard path.
