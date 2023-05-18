@@ -25,12 +25,13 @@ void write(const string& path, const string& contents);
 string print_date(const string& date_format);
 string exec_shell(const string& cmd, bool need_output);
 template <typename T, typename U>U convert(T value);
-string get_pid(const string& process_name);
-vector<string> get_pid_list(const string &process_name);
+pid_t get_pid(const string& process_name);
+vector<pid_t> get_pids(const string &process_name);
 void renice_process(const string& process_name, int new_priority);
 void kill_process(const string& process_name);
-void set_cpu_affinity(const string& process_name, int start, int end);
-void change_scheduler(const string& process_name, const string& sched_policy, int priority);
+void kill_processes(const string& process_name);
+void change_process_cpu_affinity(const string& process_name, int start, int end);
+void change_process_scheduler(const string& process_name, const string& sched_policy, int priority);
 string get_home_pkgname();
 string get_ime_pkgname();
 void mlock_item(string mlock_type, string object);
@@ -167,7 +168,7 @@ template <typename T, typename U>U convert(T value) {
   return result;
 }
 
-string get_pid(const string &process_name) {
+pid_t get_pid(const string &process_name) {
   // Initialize variable to read output.
   string output;
 
@@ -176,12 +177,12 @@ string get_pid(const string &process_name) {
   
   // Use exec_shell() function to execute the shell command.
   output = exec_shell(cmd, true);  
-
-  // Return the output.
-  return output;
+  
+  // Use convert() function to convert string to pid_t & return.
+  return convert<string, pid_t>(output);
 }
 
-vector<string> get_pid_list(const string &process_name) {
+vector<pid_t> get_pids(const string &process_name) {
   // Initialize variable to read output.
   string output;
 
@@ -191,20 +192,19 @@ vector<string> get_pid_list(const string &process_name) {
   // Use exec_shell() function to execute the shell command.
   output = exec_shell(cmd, true);  
 
-  // Split output by line and return as vector.
-  vector<string> pid_list;
+  // Split output by line to string, convert string to pid_t and return as vector.
+  vector<pid_t> pid_list;
   stringstream ss(output);
   string pid;
   while (getline(ss, pid, '\n')) { 
-    pid_list.push_back(pid); 
+    pid_list.push_back(convert<string, pid_t>(pid)); 
   }
   return pid_list;
 }
 
 void renice_process(const string& process_name, int new_priority) {
-  // Get the process ID of the current process using get_pid() function.
-  // Use convert() function to convert string to pid_t.
-  pid_t pid = convert<string, pid_t>(get_pid(process_name));
+  // Get the PID of the given process name using get_pid() function.
+  pid_t pid = get_pid(process_name);
 
   // Set the priority of the process.
   setpriority(PRIO_PROCESS, pid, new_priority);
@@ -212,19 +212,29 @@ void renice_process(const string& process_name, int new_priority) {
 
 // Process killer function.
 void kill_process(const string& process_name) {
-  // Get the process ID of the current process using get_pid() function.
-  // Use convert() function to convert string to pid_t.
-  pid_t pid = convert<string, pid_t>(get_pid(process_name));
+  // Get the PID of the given process name using get_pid() function.
+  pid_t pid = get_pid(process_name);
     
   // Send the SIGKILL signal to the process with the specified PID.
   kill(pid, SIGKILL);
 }
 
+// Kill processes with same name.
+void kill_processes(const string& process_name) {
+  // Get list of pids & store as vector.
+  vector<pid_t> pids = get_pids(process_name);
+
+  // Iterate through the list of pids.
+  for (pid_t pid : pids) {
+    // Send the SIGKILL signal to the process using the given PID.
+    kill(pid, SIGKILL);  
+  }
+}
+
 // Change CPU affinity of a process.
-void set_cpu_affinity(const string& process_name, int start, int end) {
-  // Get the process ID of the current process using get_pid() function.
-  // Use convert() function to convert string to pid_t.
-  pid_t pid = convert<string, pid_t>(get_pid(process_name));
+void change_process_cpu_affinity(const string& process_name, int start, int end) {
+  // Get the PID of the given process name using get_pid() function.
+  pid_t pid = get_pid(process_name);
 
   // Initialize the mask to all zeros.
   cpu_set_t mask;
@@ -234,20 +244,22 @@ void set_cpu_affinity(const string& process_name, int start, int end) {
   for (int i = start; i <= end; i++) {
     CPU_SET(i, &mask);
   }
-
+  
+  // Set the CPU affinity to the process from the mask.
   int result = sched_setaffinity(pid, sizeof(mask), &mask);
+  
+  // Check the return value to see if the call was successful.  
   if (result == -1) {
     xlog("error", "Failure setting CPU affinity: " + process_name);
   }
 }
 
-// Change CPU scheduling of a process.
-void change_scheduler(const string& process_name, const int& sched_policy, int priority) {
-  // Get the process ID of the current process using get_pid() function.
-  // Use convert() function to convert string to pid_t.
-  pid_t pid = convert<string, pid_t>(get_pid(process_name));
+// Change the CPU scheduling policy of a process.
+void change_process_scheduler(const string& process_name, const int& sched_policy, int priority) {
+  // Get the PID of the given process name using get_pid() function.
+  pid_t pid = get_pid(process_name);
 
-  // Set the scheduling policy for the current process to SCHED_FIFO.
+  // Set the scheduling policy for the current process.
   sched_param param;
   param.sched_priority = priority;
   int result = sched_setscheduler(pid, sched_policy, &param);
