@@ -198,14 +198,14 @@ vector<pid_t> get_pids(const string &process_name) {
   // Use exec_shell() function to execute the shell command.
   output = exec_shell(cmd, true);  
 
-  // Split output by line to string, convert string to pid_t and return as vector.
-  vector<pid_t> pid_list;
+  // Split the output by line, convert string to pid_t and store it in a vector.
+  vector<pid_t> list;
   stringstream ss(output);
-  string pid;
-  while (getline(ss, pid)) { 
-    pid_list.push_back(convert<string, pid_t>(pid)); 
+  string line;
+  while (getline(ss, line, '\n')) { 
+    list.push_back(convert<string, pid_t>(line)); 
   }
-  return pid_list;
+  return list;    
 }
 
 pid_t get_proc_tid(const string &process_name, const string &thread_name) {
@@ -227,7 +227,7 @@ vector<pid_t> get_proc_tids(const string &process_name, const string &thread_nam
   string output;
 
   // Build command to execute.
-  string cmd = "pid=$(pidof -s " + process_name + "); for tid in $(ls /proc/$pid/task/); do thread_name=$(cat /proc/$pid/task/$tid/comm); [[ \"$(echo $thread_name | grep -i -E " + thread_name + ")\" != \"\" ]] && list=\"$list\n$tid\" && break; done";
+  string cmd = "pid=$(pidof -s " + process_name + "); for tid in $(ls /proc/$pid/task/); do thread_name=$(cat /proc/$pid/task/$tid/comm); [[ \"$(echo $thread_name | grep -i -E " + thread_name + ")\" != \"\" ]] && list=\"$list\n$tid\" && break; done; echo $list";
   
   // Use exec_shell() function to execute the shell command.
   output = exec_shell(cmd, true);    
@@ -236,8 +236,8 @@ vector<pid_t> get_proc_tids(const string &process_name, const string &thread_nam
   vector<pid_t> list;
   stringstream ss(output);
   string line;
-  while (getline(ss, list)) { 
-    list.push_back(convert<string, pid_t>(output)); 
+  while (getline(ss, line, '\n')) { 
+    list.push_back(convert<string, pid_t>(line)); 
   }
   return list;    
 }
