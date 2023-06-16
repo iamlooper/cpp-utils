@@ -521,10 +521,10 @@ vector<string> get_paths_from_wp(const string& wildcard_path) {
   vector<string> list;
   stringstream ss(output);
   string line;
-  while (getline(ss, list)) { 
-    list.push_back(list); 
+  while (getline(ss, line, '\n')) { 
+    list.push_back(line); 
   }
-  return list;  
+  return list;    
 }
 
 // remove() with support to delete wildcard path.
