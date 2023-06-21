@@ -541,3 +541,16 @@ void remove_path(const string& path) {
     remove(path.c_str());
   }
 }
+
+// Check if app exists using `PackageManager`.
+bool is_app_exists(const string& pkg_name) {
+  // Build shell command to execute.
+  string cmd = "pm path " + pkg_name + " &>/dev/null && echo true || echo false";
+  
+  // Return true under condition else false.
+  if (exec_shell(cmd, true) == "true") {
+    return true;
+  } else { 
+    return false;
+  }
+}
