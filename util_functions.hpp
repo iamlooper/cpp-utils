@@ -14,7 +14,7 @@
 #include <libgen.h>
 #include <regex>
 #include <unordered_map>
-#include <filesystem>
+#include <sys/stat.h>
 
 // Set standard (std) namespace.
 using namespace std;
@@ -179,7 +179,7 @@ pid_t get_pid(const string &process_name) {
   string output;
 
   // Build command to execute.
-  string cmd = "pidof -s " + process_name;
+  string cmd = "ps -Ao pid,args | grep -i -E '" + process_name + "' | awk '{print $1}' | head -n 1";
   
   // Use exec_shell() function to execute the shell command.
   output = exec_shell(cmd, true);  
@@ -509,7 +509,9 @@ void web_fetch(const string& link, const string& file_path) {
 
 // Check if path exists.
 bool is_path_exists(const string& path) {
-  return filesystem::exists(path);
+  struct stat info;
+  int ret = stat(path.c_str(), &info);
+  return ret == 0;
 }
 
 // Get list of paths from wildcard path. (e.g /foo/*.txt)
